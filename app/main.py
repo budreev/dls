@@ -663,7 +663,7 @@ if __name__ == '__main__':
 
     logging.info(f'> Starting dev-server ...')
 
-    ssl_keyfile = join(dirname(__file__), 'cert/key.pem')
-    ssl_certfile = join(dirname(__file__), 'cert/cert.pem')
+    ssl_keyfile = join(dirname(__file__), '/app/cert/key.pem')
+    ssl_certfile = join(dirname(__file__), '/app/cert/cert.pem')
 
     uvicorn.run('main:app', host='0.0.0.0', port=8080, ssl_keyfile=ssl_keyfile, ssl_certfile=ssl_certfile, reload=True)
