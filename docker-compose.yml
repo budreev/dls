@@ -5,7 +5,7 @@ x-dls-variables: &dls-variables
   DLS_URL: localhost # REQUIRED, change to your ip or hostname
   DLS_PORT: 443
   LEASE_EXPIRE_DAYS: 90  # 90 days is maximum
-  DATABASE: 'postgresql+psycopg2://dls:1qaz@WSX3edc@172.17.0.1/dls'
+  DATABASE: 'postgresql+psycopg2://dls:test_password@172.17.0.1/dls'
   DEBUG: false
 
 services:
