@@ -17,7 +17,7 @@ services:
     environment:
       <<: *dls-variables
     ports:
-      - "443:443"
+      - "8080:8080"
     volumes:
       - /opt/docker/fastapi-dls/cert:/app/cert
     logging: # optional, for those who do not need logs
