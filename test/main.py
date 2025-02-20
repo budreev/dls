@@ -1,7 +1,7 @@
 import sys
 from base64 import b64encode as b64enc
 from calendar import timegm
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 from hashlib import sha256
 from os.path import dirname, join
 from uuid import uuid4, UUID

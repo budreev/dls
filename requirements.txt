@@ -2,7 +2,9 @@ fastapi==0.115.6
 uvicorn[standard]==0.34.0
 python-jose==3.3.0
 pycryptodome==3.21.0
+pycryptodomex
 python-dateutil==2.8.2
 sqlalchemy==2.0.37
 markdown==3.7
 python-dotenv==1.0.1
+

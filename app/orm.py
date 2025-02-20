@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone, UTC
+from datetime import datetime, timedelta, timezone
 
 from dateutil.relativedelta import relativedelta
 from sqlalchemy import Column, VARCHAR, CHAR, ForeignKey, DATETIME, update, and_, inspect, text
@@ -14,7 +14,6 @@ class Origin(Base):
     __tablename__ = "origin"
 
     origin_ref = Column(CHAR(length=36), primary_key=True, unique=True, index=True)  # uuid4
-
     # service_instance_xid = Column(CHAR(length=36), nullable=False, index=True)  # uuid4 # not necessary, we only support one service_instance_xid ('INSTANCE_REF')
     hostname = Column(VARCHAR(length=256), nullable=True)
     guest_driver_version = Column(VARCHAR(length=10), nullable=True)
@@ -178,7 +177,7 @@ class Lease(Base):
     @staticmethod
     def delete_expired(engine: Engine) -> int:
         session = sessionmaker(bind=engine)()
-        deletions = session.query(Lease).filter(Lease.lease_expires <= datetime.now(UTC)).delete()
+        deletions = session.query(Lease).filter(Lease.lease_expires <= datetime.now(timezone.utc)).delete()
         session.commit()
         session.close()
         return deletions
