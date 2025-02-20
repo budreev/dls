@@ -221,8 +221,13 @@ def migrate(engine: Engine):
 
     def upgrade_1_0_to_1_1():
         x = db.dialect.get_columns(engine.connect(), Lease.__tablename__)
-        x = next(_ for _ in x if _['name'] == 'origin_ref')
-        if x['primary_key'] > 0:
+        x = next((_ for _ in x if _['name'] == 'origin_ref'), None)
+
+        if x is None:
+            print("Ошибка: Колонка 'origin_ref' не найдена в таблице 'lease'")
+            return
+
+        if x.get('primary_key', 0) > 0:
             print('Found old database schema with "origin_ref" as primary-key in "lease" table. Dropping table!')
             print('  Your leases are recreated on next renewal!')
             print('  If an error message appears on the client, you can ignore it.')
