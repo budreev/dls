@@ -3,7 +3,7 @@ version: '3.9'
 x-dls-variables: &dls-variables
   TZ: Europe/Moscow # REQUIRED, set your timezone correctly on fastapi-dls AND YOUR CLIENTS !!!
   DLS_URL: localhost # REQUIRED, change to your ip or hostname
-  DLS_PORT: 443
+  DLS_PORT: 8080
   LEASE_EXPIRE_DAYS: 90  # 90 days is maximum
   DATABASE: 'postgresql+psycopg2://dls:test_password@172.17.0.1/dls'
   DEBUG: false

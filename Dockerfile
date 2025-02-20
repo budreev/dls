@@ -19,4 +19,4 @@ RUN apk update \
 COPY app /app
 COPY README.md /README.md
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "443", "--app-dir", "/app", "--proxy-headers", "--ssl-keyfile", "/app/cert/key.pem", "--ssl-certfile", "/app/cert/cert.pem"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080", "--app-dir", "/app", "--proxy-headers", "--ssl-keyfile", "/app/cert/key.pem", "--ssl-certfile", "/app/cert/cert.pem"]
