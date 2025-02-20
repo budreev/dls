@@ -41,7 +41,7 @@ db_init(db), migrate(db)
 
 # Load DLS variables (all prefixed with "INSTANCE_*" is used as "SERVICE_INSTANCE_*" or "SI_*" in official dls service)
 DLS_URL = str(env('DLS_URL', 'localhost'))
-DLS_PORT = int(env('DLS_PORT', '443'))
+DLS_PORT = int(env('DLS_PORT', '8080'))
 SITE_KEY_XID = str(env('SITE_KEY_XID', '00000000-0000-0000-0000-000000000000'))
 INSTANCE_REF = str(env('INSTANCE_REF', '10000000-0000-0000-0000-000000000001'))
 ALLOTMENT_REF = str(env('ALLOTMENT_REF', '20000000-0000-0000-0000-000000000001'))
@@ -88,8 +88,7 @@ async def lifespan(_: FastAPI):
     logger.info(f'Shutting down ...')
 
 
-config = dict(openapi_url=None, docs_url=None,
-              redoc_url=None)  # dict(openapi_url='/-/openapi.json', docs_url='/-/docs', redoc_url='/-/redoc')
+config = dict(openapi_url='/-/openapi.json', docs_url='/-/docs', redoc_url='/-/redoc')  # dict(openapi_url='/-/openapi.json', docs_url='/-/docs', redoc_url='/-/redoc')
 app = FastAPI(title='FastAPI-DLS', description='Minimal Delegated License Service (DLS).', version=VERSION,
               lifespan=lifespan, **config)
 
@@ -664,7 +663,7 @@ if __name__ == '__main__':
 
     logging.info(f'> Starting dev-server ...')
 
-    ssl_keyfile = join(dirname(__file__), 'cert/webserver.key')
-    ssl_certfile = join(dirname(__file__), 'cert/webserver.crt')
+    ssl_keyfile = join(dirname(__file__), 'cert/key.pem')
+    ssl_certfile = join(dirname(__file__), 'cert/cert.pem')
 
-    uvicorn.run('main:app', host='0.0.0.0', port=443, ssl_keyfile=ssl_keyfile, ssl_certfile=ssl_certfile, reload=True)
+    uvicorn.run('main:app', host='0.0.0.0', port=8080, ssl_keyfile=ssl_keyfile, ssl_certfile=ssl_certfile, reload=True)
