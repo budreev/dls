@@ -1,4 +1,4 @@
-FROM python:3.18-alpine
+FROM alpine:3.18
 
 ARG VERSION
 ARG COMMIT=""
