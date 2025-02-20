@@ -661,7 +661,7 @@ if __name__ == '__main__':
     #
     ###
 
-    logging.info(f'> Starting dev-server ...')
+    logger.info(f'> Starting dev-server ...')
 
     ssl_keyfile = join(dirname(__file__), '/app/cert/key.pem')
     ssl_certfile = join(dirname(__file__), '/app/cert/cert.pem')
