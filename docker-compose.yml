@@ -1,5 +1,3 @@
-version: '3.9'
-
 x-dls-variables: &dls-variables
   TZ: Europe/Moscow
   DLS_URL: localhost
@@ -7,7 +5,7 @@ x-dls-variables: &dls-variables
   ADMIN_PASSWORD: "super_password"
   DLS_PORT: 8080
   LEASE_EXPIRE_DAYS: 90
-  DATABASE: postgresql+psycopg2://${DB_USER}:${DB_PASSWORD}@${DB_HOST}/${DB_NAME}
+  DATABASE: postgresql+psycopg2://${DB_USER}:${DB_PASSWORD}@postgres/${DB_NAME}
   DEBUG: false
   VERSION: 1.0
 
@@ -19,25 +17,26 @@ services:
       POSTGRES_USER: dls
       POSTGRES_PASSWORD: test_password
       POSTGRES_DB: dls
-
     ports:
       - "5432:5432"
     volumes:
       - /opt/docker/postgres_data:/var/lib/postgresql/data
+
   dls:
     build:
       context: .
       dockerfile: Dockerfile
     restart: always
+    depends_on:
+      - postgres
     environment:
       <<: *dls-variables
     ports:
       - "8080:8080"
     volumes:
       - /opt/docker/fastapi-dls/cert:/app/cert
-    logging: # optional, for those who do not need logs
+    logging:
       driver: "json-file"
       options:
         max-file: 5
         max-size: 10m
-
