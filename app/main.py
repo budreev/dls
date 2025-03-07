@@ -246,10 +246,6 @@ async def get_auth_token(x_api_key: str = Header(None)):
         raise HTTPException(status_code=500, detail=f"Error generating token: {str(e)}")
 
 
-@app.get('/', summary='Index')
-async def index():
-    return RedirectResponse('/-/readme')
-
 
 @app.get('/-/', summary='* Index', dependencies=[Depends(get_current_user)], response_model=None)
 async def _index():
@@ -280,16 +276,16 @@ async def _config():
     })
 
 
-@app.get('/-/readme', summary='* Readme')
+@app.get('/-/readme', summary='* Readme', dependencies=[Depends(get_current_user)])
 async def _readme():
     from markdown import markdown
     content = load_file(join(dirname(__file__), '../README.md')).decode('utf-8')
     return HTMLr(markdown(text=content, extensions=['tables', 'fenced_code', 'md_in_html', 'nl2br', 'toc']))
 
 
-@app.get('/-/manage', summary='* Management UI')
-async def _manage(request: Request):
-    # __get_token(request, required_role="admin")
+@app.get('/-/manage', summary='* Management UI', dependencies=[Depends(get_current_user)])
+async def _manage():
+
 
     response = '''
     <!DOCTYPE html>
@@ -328,7 +324,7 @@ async def _manage(request: Request):
 
 
 @app.get('/-/origins', summary='* Origins')
-async def _origins(request: Request, leases: bool = False, db: Session = Depends(get_db)):
+async def _origins(leases: bool = False, db: Session = Depends(get_db)):
     session = sessionmaker(bind=db)()
     response = []
     for origin in session.query(Origin).all():
