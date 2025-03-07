@@ -12,6 +12,18 @@ x-dls-variables: &dls-variables
   VERSION: 1.0
 
 services:
+  postgres:
+    image: postgres:15
+    restart: always
+    environment:
+      POSTGRES_USER: dls
+      POSTGRES_PASSWORD: test_password
+      POSTGRES_DB: dls
+
+    ports:
+      - "5432:5432"
+    volumes:
+      - /opt/docker/postgres_data:/var/lib/postgresql/data
   dls:
     build:
       context: .
@@ -28,3 +40,4 @@ services:
       options:
         max-file: 5
         max-size: 10m
+
