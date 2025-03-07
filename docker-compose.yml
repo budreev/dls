@@ -15,8 +15,7 @@ services:
       context: .
       dockerfile: Dockerfile
     restart: always
-    depends_on:
-      - postgres
+
     environment:
       <<: *dls-variables
     ports:
