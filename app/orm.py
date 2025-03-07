@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 
 from dateutil.relativedelta import relativedelta
 from sqlalchemy import Column, VARCHAR, CHAR, ForeignKey, TIMESTAMP, update, and_, inspect, text, String, DateTime
-from sqlalchemy.engine import Engine
+from sqlalchemy.engine import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 
 from util import NV
@@ -14,6 +14,24 @@ Base = declarative_base()
 
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
+
+
+from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.engine import Engine
+from contextlib import contextmanager
+
+
+db = create_engine(os.getenv('DATABASE'), echo=True, future=True)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=db)
+
+@contextmanager
+def get_db():
+    """Контекстный менеджер для управления сессией базы данных"""
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 class Users(Base):
     __tablename__ = "users"
