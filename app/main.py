@@ -13,9 +13,9 @@ from uuid import uuid4
 from dateutil.relativedelta import relativedelta
 from dotenv import load_dotenv
 from fastapi import FastAPI, Depends
-from fastapi import HTTPException, Header
+from fastapi import HTTPException, Header, Security
 from fastapi.requests import Request
-from fastapi.security import OAuth2PasswordRequestForm
+from fastapi.security import OAuth2PasswordRequestForm, HTTPBearer, HTTPAuthorizationCredentials
 from jose import jws, jwk, jwt, JWTError
 from jose.constants import ALGORITHMS
 from sqlalchemy import create_engine
@@ -24,7 +24,7 @@ from starlette.middleware.cors import CORSMiddleware
 from starlette.responses import StreamingResponse, JSONResponse as JSONr, HTMLResponse as HTMLr, Response, \
     RedirectResponse
 
-from orm import Origin, Lease, init as db_init, migrate, Users, RefreshTokens
+from orm import Origin, Lease, init_db, migrate, Users, RefreshTokens
 from util import load_key, load_file
 
 # Load variables
@@ -39,7 +39,7 @@ VERSION, COMMIT, DEBUG = env('VERSION', 'unknown'), env('COMMIT', 'unknown'), bo
 # Database connection
 # db = create_engine(str(env('DATABASE', 'sqlite:///db.sqlite')))
 db = create_engine(str(env('DATABASE')), echo=True, future=True)
-db_init(db), migrate(db)
+init_db(db), migrate(db)
 
 # Load DLS variables (all prefixed with "INSTANCE_*" is used as "SERVICE_INSTANCE_*" or "SI_*" in official dls service)
 DLS_URL = str(env('DLS_URL', 'localhost'))
@@ -109,6 +109,7 @@ app.add_middleware(
     allow_headers=['*'],
 )
 
+security = HTTPBearer()
 
 # Helper
 # def __get_token(request: Request) -> dict:
@@ -143,6 +144,28 @@ def __get_token(request: Request, required_role: str = None) -> dict:
     except JWTError as e:
         raise HTTPException(status_code=403, detail=f"Invalid token: {str(e)}")
 
+def get_current_user(credentials: HTTPAuthorizationCredentials = Security(security), required_role: str = None):
+    token = credentials.credentials
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = payload.get("sub")
+
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid token")
+
+        # Проверяем пользователя в БД
+        user = db.query(Users).filter(Users.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=401, detail="User not found")
+
+        # Проверяем роль, если требуется
+        if required_role and user.username != required_role:
+            raise HTTPException(status_code=403, detail="Access forbidden")
+
+        return user
+
+    except JWTError:
+        raise HTTPException(status_code=403, detail="Invalid token")
 
 def create_access_token(data: dict, expires_delta: timedelta):
     to_encode = data.copy()
@@ -238,7 +261,7 @@ async def index():
     return RedirectResponse('/-/readme')
 
 
-@app.get('/-/', summary='* Index')
+@app.get('/-/', summary='* Index', dependencies=[Depends(get_current_user)])
 async def _index():
     return RedirectResponse('/-/readme')
 
