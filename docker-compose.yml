@@ -5,10 +5,6 @@ x-dls-variables: &dls-variables
   DLS_URL: localhost
   ADMIN_USERNAME: "super_admin"
   ADMIN_PASSWORD: "super_password"
-  DB_USER: dls
-  DB_PASSWORD: test_password
-  DB_HOST: 172.17.0.1
-  DB_NAME: dls
   DLS_PORT: 8080
   LEASE_EXPIRE_DAYS: 90
   DATABASE: postgresql+psycopg2://${DB_USER}:${DB_PASSWORD}@${DB_HOST}/${DB_NAME}
