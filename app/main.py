@@ -139,7 +139,7 @@ def __get_token(request: Request, required_role: str = None) -> dict:
     except JWTError as e:
         raise HTTPException(status_code=403, detail=f"Invalid token: {str(e)}")
 
-def get_current_user(credentials: HTTPAuthorizationCredentials = Security(security), required_role: str = None, db: Session = Depends(get_db)):
+def get_current_user(db: Session, credentials: HTTPAuthorizationCredentials = Security(security), required_role: str = None):
     token = credentials.credentials
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
@@ -169,7 +169,7 @@ def create_access_token(data: dict, expires_delta: timedelta):
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
-def create_refresh_token(user_id: str, db: Session = Depends(get_db)):
+def create_refresh_token(user_id: str, db: Session):
     refresh_token = str(uuid4())  # Генерируем случайный Refresh-токен
     expires_at = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
 
