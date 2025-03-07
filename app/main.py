@@ -186,7 +186,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
 
     # Генерируем токены
     access_token = create_access_token({"sub": user.id}, timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
-    refresh_token = create_refresh_token(user.id)
+    refresh_token = create_refresh_token(user.id, db)
 
     return {"access_token": access_token, "refresh_token": refresh_token, "token_type": "bearer"}
 
