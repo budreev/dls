@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from dateutil.relativedelta import relativedelta
 from sqlalchemy import Column, VARCHAR, CHAR, ForeignKey, TIMESTAMP, update, and_, inspect, text, String, DateTime
 from sqlalchemy.engine import create_engine
-from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy.orm import declarative_base, Session
 
 from util import NV
 
@@ -16,9 +16,9 @@ ADMIN_USERNAME = os.getenv("ADMIN_USERNAME")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
 
 
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import sessionmaker
 from sqlalchemy.engine import Engine
-from contextlib import contextmanager
+
 
 
 db = create_engine(os.getenv('DATABASE'), echo=True, future=True)
@@ -26,6 +26,7 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=db)
 
 def get_db():
     """Функция для получения сессии БД с автоматическим закрытием"""
+
     db = SessionLocal()
     try:
         yield db
@@ -42,6 +43,7 @@ class Users(Base):
 class RefreshTokens(Base):
     __tablename__ = "refresh_tokens"
 
+
     token = Column(String, primary_key=True, unique=True, nullable=False)
     user_id = Column(String, ForeignKey("users.id"), nullable=False)
     expires_at = Column(DateTime, nullable=False)
@@ -53,7 +55,6 @@ class Origin(Base):
     __tablename__ = "origin"
 
     origin_ref = Column(CHAR(length=36), primary_key=True, unique=True, index=True)  # uuid4
-    # service_instance_xid = Column(CHAR(length=36), nullable=False, index=True)  # uuid4 # not necessary, we only support one service_instance_xid ('INSTANCE_REF')
     hostname = Column(VARCHAR(length=256), nullable=True)
     guest_driver_version = Column(VARCHAR(length=10), nullable=True)
     os_platform = Column(VARCHAR(length=256), nullable=True)
@@ -63,70 +64,63 @@ class Origin(Base):
         return f'Origin(origin_ref={self.origin_ref}, hostname={self.hostname})'
 
     def serialize(self) -> dict:
-        _ = NV().find(self.guest_driver_version)
-
         return {
-            'origin_ref': self.origin_ref,
-            # 'service_instance_xid': self.service_instance_xid,
-            'hostname': self.hostname,
-            'guest_driver_version': self.guest_driver_version,
-            'os_platform': self.os_platform,
-            'os_version': self.os_version,
-            '$driver': _ if _ is not None else None,
+            "origin_ref": self.origin_ref,
+            "hostname": self.hostname,
+            "guest_driver_version": self.guest_driver_version,
+            "os_platform": self.os_platform,
+            "os_version": self.os_version,
         }
 
     @staticmethod
     def create_statement(engine: Engine):
+        """Генерация SQL-запроса для создания таблицы"""
         from sqlalchemy.schema import CreateTable
         return CreateTable(Origin.__table__).compile(engine)
 
     @staticmethod
-    def create_or_update(engine: Engine, origin: "Origin"):
-        session = sessionmaker(bind=engine)()
-        entity = session.query(Origin).filter(Origin.origin_ref == origin.origin_ref).first()
+    def create_or_update(db: Session, origin: "Origin"):
+        """Создает или обновляет запись в таблице Origin"""
+        entity = db.query(Origin).filter(Origin.origin_ref == origin.origin_ref).first()
         if entity is None:
-            session.add(origin)
+            db.add(origin)
         else:
-            x = dict(
-                hostname=origin.hostname,
-                guest_driver_version=origin.guest_driver_version,
-                os_platform=origin.os_platform,
-                os_version=origin.os_version
-            )
-            session.execute(update(Origin).where(Origin.origin_ref == origin.origin_ref).values(**x))
-        session.commit()
-        session.flush()
-        session.close()
+            db.query(Origin).filter(Origin.origin_ref == origin.origin_ref).update({
+                "hostname": origin.hostname,
+                "guest_driver_version": origin.guest_driver_version,
+                "os_platform": origin.os_platform,
+                "os_version": origin.os_version,
+            })
+        db.commit()
 
     @staticmethod
-    def delete(engine: Engine, origin_refs: [str] = None) -> int:
-        session = sessionmaker(bind=engine)()
+    def delete(db: Session, origin_refs: list[str] = None) -> int:
+        """Удаляет указанные Origin или все записи"""
         if origin_refs is None:
-            deletions = session.query(Origin).delete()
+            deletions = db.query(Origin).delete()
         else:
-            deletions = session.query(Origin).filter(Origin.origin_ref.in_(origin_refs)).delete()
-        session.commit()
-        session.close()
+            deletions = db.query(Origin).filter(Origin.origin_ref.in_(origin_refs)).delete()
+        db.commit()
         return deletions
 
     @staticmethod
-    def delete_expired(engine: Engine) -> int:
-        session = sessionmaker(bind=engine)()
-        origins = session.query(Origin).join(Lease, Origin.origin_ref == Lease.origin_ref, isouter=True).filter(Lease.lease_ref.is_(None)).all()
-        origin_refs = [origin.origin_ref for origin in origins]
-        deletions = session.query(Origin).filter(Origin.origin_ref.in_(origin_refs)).delete()
-        session.commit()
-        session.close()
+    def delete_expired(db: Session) -> int:
+        """Удаляет записи Origin, которые больше не связаны с Lease"""
+        from orm import Lease  # Импортируем здесь, чтобы избежать циклических импортов
+        expired_origins = db.query(Origin).outerjoin(Lease, Origin.origin_ref == Lease.origin_ref).filter(
+            Lease.lease_ref.is_(None)
+        ).all()
+        origin_refs = [origin.origin_ref for origin in expired_origins]
+        deletions = db.query(Origin).filter(Origin.origin_ref.in_(origin_refs)).delete()
+        db.commit()
         return deletions
 
 
 class Lease(Base):
     __tablename__ = "lease"
 
-    lease_ref = Column(CHAR(length=36), primary_key=True, nullable=False, index=True)  # uuid4
-
-    origin_ref = Column(CHAR(length=36), ForeignKey(Origin.origin_ref, ondelete='CASCADE'), nullable=False, index=True)  # uuid4
-    # scope_ref = Column(CHAR(length=36), nullable=False, index=True)  # uuid4 # not necessary, we only support one scope_ref ('ALLOTMENT_REF')
+    lease_ref = Column(CHAR(length=36), primary_key=True, nullable=False, index=True)
+    origin_ref = Column(CHAR(length=36), ForeignKey("origin.origin_ref", ondelete="CASCADE"), nullable=False, index=True)
     lease_created = Column(TIMESTAMP(), nullable=False)
     lease_expires = Column(TIMESTAMP(), nullable=False)
     lease_updated = Column(TIMESTAMP(), nullable=False)
@@ -139,110 +133,79 @@ class Lease(Base):
         lease_renewal = self.lease_updated + relativedelta(seconds=lease_renewal)
 
         return {
-            'lease_ref': self.lease_ref,
-            'origin_ref': self.origin_ref,
-            # 'scope_ref': self.scope_ref,
-            'lease_created': self.lease_created.replace(tzinfo=timezone.utc).isoformat(),
-            'lease_expires': self.lease_expires.replace(tzinfo=timezone.utc).isoformat(),
-            'lease_updated': self.lease_updated.replace(tzinfo=timezone.utc).isoformat(),
-            'lease_renewal': lease_renewal.replace(tzinfo=timezone.utc).isoformat(),
+            "lease_ref": self.lease_ref,
+            "origin_ref": self.origin_ref,
+            "lease_created": self.lease_created.replace(tzinfo=timezone.utc).isoformat(),
+            "lease_expires": self.lease_expires.replace(tzinfo=timezone.utc).isoformat(),
+            "lease_updated": self.lease_updated.replace(tzinfo=timezone.utc).isoformat(),
+            "lease_renewal": lease_renewal.replace(tzinfo=timezone.utc).isoformat(),
         }
 
     @staticmethod
-    def create_statement(engine: Engine):
-        from sqlalchemy.schema import CreateTable
-        return CreateTable(Lease.__table__).compile(engine)
-
-    @staticmethod
-    def create_or_update(engine: Engine, lease: "Lease"):
-        session = sessionmaker(bind=engine)()
-        entity = session.query(Lease).filter(Lease.lease_ref == lease.lease_ref).first()
+    def create_or_update(db: Session, lease: "Lease"):
+        """Создает или обновляет запись в таблице Lease"""
+        entity = db.query(Lease).filter(Lease.lease_ref == lease.lease_ref).first()
         if entity is None:
             if lease.lease_updated is None:
                 lease.lease_updated = lease.lease_created
-            session.add(lease)
+            db.add(lease)
         else:
-            x = dict(origin_ref=lease.origin_ref, lease_expires=lease.lease_expires, lease_updated=lease.lease_updated)
-            session.execute(update(Lease).where(Lease.lease_ref == lease.lease_ref).values(**x))
-        session.commit()
-        session.flush()
-        session.close()
+            db.query(Lease).filter(Lease.lease_ref == lease.lease_ref).update({
+                "origin_ref": lease.origin_ref,
+                "lease_expires": lease.lease_expires,
+                "lease_updated": lease.lease_updated,
+            })
+        db.commit()
 
     @staticmethod
-    def find_by_origin_ref(engine: Engine, origin_ref: str) -> ["Lease"]:
-        session = sessionmaker(bind=engine)()
-        entities = session.query(Lease).filter(Lease.origin_ref == origin_ref).all()
-        session.close()
-        return entities
+    def find_by_origin_ref(db: Session, origin_ref: str) -> list["Lease"]:
+        """Находит все записи Lease по origin_ref"""
+        return db.query(Lease).filter(Lease.origin_ref == origin_ref).all()
 
     @staticmethod
-    def find_by_lease_ref(engine: Engine, lease_ref: str) -> "Lease":
-        session = sessionmaker(bind=engine)()
-        entity = session.query(Lease).filter(Lease.lease_ref == lease_ref).first()
-        session.close()
-        return entity
+    def find_by_lease_ref(db: Session, lease_ref: str) -> "Lease":
+        """Находит запись Lease по lease_ref"""
+        return db.query(Lease).filter(Lease.lease_ref == lease_ref).first()
 
     @staticmethod
-    def find_by_origin_ref_and_lease_ref(engine: Engine, origin_ref: str, lease_ref: str) -> "Lease":
-        session = sessionmaker(bind=engine)()
-        entity = session.query(Lease).filter(and_(Lease.origin_ref == origin_ref, Lease.lease_ref == lease_ref)).first()
-        session.close()
-        return entity
+    def find_by_origin_ref_and_lease_ref(db: Session, origin_ref: str, lease_ref: str) -> "Lease":
+        """Находит запись Lease по origin_ref и lease_ref"""
+        return db.query(Lease).filter(and_(Lease.origin_ref == origin_ref, Lease.lease_ref == lease_ref)).first()
 
     @staticmethod
-    def renew(engine: Engine, lease: "Lease", lease_expires: datetime, lease_updated: datetime):
-        session = sessionmaker(bind=engine)()
-        x = dict(lease_expires=lease_expires, lease_updated=lease_updated)
-        session.execute(update(Lease).where(and_(Lease.origin_ref == lease.origin_ref, Lease.lease_ref == lease.lease_ref)).values(**x))
-        session.commit()
-        session.close()
+    def renew(db: Session, lease: "Lease", lease_expires: datetime, lease_updated: datetime):
+        """Обновляет lease_expires и lease_updated"""
+        db.query(Lease).filter(
+            and_(Lease.origin_ref == lease.origin_ref, Lease.lease_ref == lease.lease_ref)
+        ).update({"lease_expires": lease_expires, "lease_updated": lease_updated})
+        db.commit()
 
     @staticmethod
-    def cleanup(engine: Engine, origin_ref: str) -> int:
-        session = sessionmaker(bind=engine)()
-        deletions = session.query(Lease).filter(Lease.origin_ref == origin_ref).delete()
-        session.commit()
-        session.close()
+    def cleanup(db: Session, origin_ref: str) -> int:
+        """Удаляет все lease, связанные с origin_ref"""
+        deletions = db.query(Lease).filter(Lease.origin_ref == origin_ref).delete()
+        db.commit()
         return deletions
 
     @staticmethod
-    def delete(engine: Engine, lease_ref: str) -> int:
-        session = sessionmaker(bind=engine)()
-        deletions = session.query(Lease).filter(Lease.lease_ref == lease_ref).delete()
-        session.commit()
-        session.close()
+    def delete(db: Session, lease_ref: str) -> int:
+        """Удаляет lease по lease_ref"""
+        deletions = db.query(Lease).filter(Lease.lease_ref == lease_ref).delete()
+        db.commit()
         return deletions
 
     @staticmethod
-    def delete_expired(engine: Engine) -> int:
-        session = sessionmaker(bind=engine)()
-        deletions = session.query(Lease).filter(Lease.lease_expires <= datetime.now(timezone.utc)).delete()
-        session.commit()
-        session.close()
+    def delete_expired(db: Session) -> int:
+        """Удаляет все просроченные lease"""
+        deletions = db.query(Lease).filter(Lease.lease_expires <= datetime.now(timezone.utc)).delete()
+        db.commit()
         return deletions
 
     @staticmethod
     def calculate_renewal(renewal_period: float, delta: timedelta) -> timedelta:
-        """
-        import datetime
-        LEASE_RENEWAL_PERIOD=0.2  # 20%
-        delta = datetime.timedelta(days=1)
-        renew = delta.total_seconds() * LEASE_RENEWAL_PERIOD
-        renew = datetime.timedelta(seconds=renew)
-        expires = delta - renew  # 19.2
-
-        import datetime
-        LEASE_RENEWAL_PERIOD=0.15  # 15%
-        delta = datetime.timedelta(days=90)
-        renew = delta.total_seconds() * LEASE_RENEWAL_PERIOD
-        renew = datetime.timedelta(seconds=renew)
-        expires = delta - renew  # 76 days, 12:00:00 hours
-
-        """
+        """Рассчитывает время продления"""
         renew = delta.total_seconds() * renewal_period
-        renew = timedelta(seconds=renew)
-        return renew
-
+        return timedelta(seconds=renew)
 
 def init_db(engine):
     Base.metadata.create_all(engine)
