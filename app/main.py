@@ -1,4 +1,5 @@
 import logging
+import bcrypt
 from base64 import b64encode as b64enc
 from calendar import timegm
 from contextlib import asynccontextmanager
@@ -11,9 +12,10 @@ from uuid import uuid4
 
 from dateutil.relativedelta import relativedelta
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 from fastapi import HTTPException, Header
 from fastapi.requests import Request
+from fastapi.security import OAuth2PasswordRequestForm
 from jose import jws, jwk, jwt, JWTError
 from jose.constants import ALGORITHMS
 from sqlalchemy import create_engine
@@ -22,7 +24,7 @@ from starlette.middleware.cors import CORSMiddleware
 from starlette.responses import StreamingResponse, JSONResponse as JSONr, HTMLResponse as HTMLr, Response, \
     RedirectResponse
 
-from orm import Origin, Lease, init as db_init, migrate
+from orm import Origin, Lease, init as db_init, migrate, Users, RefreshTokens
 from util import load_key, load_file
 
 # Load variables
@@ -53,6 +55,12 @@ LEASE_RENEWAL_PERIOD = float(env('LEASE_RENEWAL_PERIOD', 0.15))
 LEASE_RENEWAL_DELTA = timedelta(days=int(env('LEASE_EXPIRE_DAYS', 90)), hours=int(env('LEASE_EXPIRE_HOURS', 0)))
 CLIENT_TOKEN_EXPIRE_DELTA = relativedelta(years=12)
 CORS_ORIGINS = str(env('CORS_ORIGINS', '')).split(',') if (env('CORS_ORIGINS')) else [f'https://{DLS_URL}']
+
+# access tokens
+ALGORITHM = "HS256"
+SECRET_KEY = "mysecretkey"
+ACCESS_TOKEN_EXPIRE_MINUTES = 15
+REFRESH_TOKEN_EXPIRE_DAYS = 30
 
 jwt_encode_key = jwk.construct(INSTANCE_KEY_RSA.export_key().decode('utf-8'), algorithm=ALGORITHMS.RS256)
 jwt_decode_key = jwk.construct(INSTANCE_KEY_PUB.export_key().decode('utf-8'), algorithm=ALGORITHMS.RS256)
@@ -136,7 +144,58 @@ def __get_token(request: Request, required_role: str = None) -> dict:
         raise HTTPException(status_code=403, detail=f"Invalid token: {str(e)}")
 
 
+def create_access_token(data: dict, expires_delta: timedelta):
+    to_encode = data.copy()
+    expire = datetime.utcnow() + expires_delta
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def create_refresh_token(user_id: str):
+    refresh_token = str(uuid4())  # Генерируем случайный Refresh-токен
+    expires_at = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+
+    # Сохраняем в БД
+    db_token = RefreshTokens(token=refresh_token, user_id=user_id, expires_at=expires_at)
+    db.add(db_token)
+    db.commit()
+
+    return refresh_token
+
 # Endpoints
+
+# Логин: выдаёт Access и Refresh токены
+@app.post("/auth/v1/login")
+async def login(form_data: OAuth2PasswordRequestForm = Depends()):
+    user = db.query(Users).filter(Users.username == form_data.username).first()
+    if not user or not bcrypt.checkpw(form_data.password.encode(), user.password.encode()):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    # Генерируем токены
+    access_token = create_access_token({"sub": user.id}, timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+    refresh_token = create_refresh_token(user.id)
+
+    return {"access_token": access_token, "refresh_token": refresh_token, "token_type": "bearer"}
+
+# Обновление Access-токена
+@app.post("/auth/v1/refresh")
+async def refresh_token(refresh_token: str):
+    token_data = db.query(RefreshTokens).filter(RefreshTokens.token == refresh_token).first()
+
+    if not token_data or token_data.is_expired():
+        raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
+
+    # Создаём новый Access-токен
+    new_access_token = create_access_token({"sub": token_data.user_id}, timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+
+    return {"access_token": new_access_token, "token_type": "bearer"}
+
+# Выход: удаление Refresh-токена
+@app.post("/auth/v1/logout")
+async def logout(refresh_token: str):
+    db.query(RefreshTokens).filter(RefreshTokens.token == refresh_token).delete()
+    db.commit()
+    return {"message": "Successfully logged out"}
 
 @app.get('/auth/v1/get-token', summary='Get Authorization Token')
 async def get_auth_token(x_api_key: str = Header(None)):

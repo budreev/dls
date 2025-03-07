@@ -1,7 +1,10 @@
+import os
+import bcrypt
+
 from datetime import datetime, timedelta, timezone
 
 from dateutil.relativedelta import relativedelta
-from sqlalchemy import Column, VARCHAR, CHAR, ForeignKey, TIMESTAMP, update, and_, inspect, text
+from sqlalchemy import Column, VARCHAR, CHAR, ForeignKey, TIMESTAMP, update, and_, inspect, text, String, DateTime
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 
@@ -9,6 +12,25 @@ from util import NV
 
 Base = declarative_base()
 
+ADMIN_USERNAME = os.getenv("ADMIN_USERNAME")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
+
+class Users(Base):
+    __tablename__ = "users"
+
+    id = Column(String, primary_key=True)  # UUID
+    username = Column(String, unique=True, nullable=False)
+    password = Column(String, nullable=False)  # Здесь должен быть захешированный пароль
+
+class RefreshTokens(Base):
+    __tablename__ = "refresh_tokens"
+
+    token = Column(String, primary_key=True, unique=True, nullable=False)
+    user_id = Column(String, ForeignKey("users.id"), nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+
+    def is_expired(self):
+        return datetime.utcnow() > self.expires_at
 
 class Origin(Base):
     __tablename__ = "origin"
@@ -205,14 +227,17 @@ class Lease(Base):
         return renew
 
 
-def init(engine: Engine):
-    tables = [Origin, Lease]
-    db = inspect(engine)
+def init_db(engine):
+    Base.metadata.create_all(engine)
     session = sessionmaker(bind=engine)()
-    for table in tables:
-        if not db.dialect.has_table(engine.connect(), table.__tablename__):
-            session.execute(text(str(table.create_statement(engine))))
-            session.commit()
+
+    existing_admin = session.query(Users).filter(Users.username == ADMIN_USERNAME).first()
+    if not existing_admin:
+        hashed_password = bcrypt.hashpw(ADMIN_PASSWORD.encode(), bcrypt.gensalt()).decode()
+        admin_user = Users(id=ADMIN_USERNAME, username=ADMIN_USERNAME, password=hashed_password)
+        session.add(admin_user)
+        session.commit()
+
     session.close()
 
 
@@ -232,7 +257,7 @@ def migrate(engine: Engine):
             print('  Your leases are recreated on next renewal!')
             print('  If an error message appears on the client, you can ignore it.')
             Lease.__table__.drop(bind=engine)
-            init(engine)
+            init_db(engine)
 
     # def upgrade_1_2_to_1_3():
     #    x = db.dialect.get_columns(engine.connect(), Lease.__tablename__)
