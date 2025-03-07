@@ -139,7 +139,7 @@ def __get_token(request: Request, required_role: str = None) -> dict:
     except JWTError as e:
         raise HTTPException(status_code=403, detail=f"Invalid token: {str(e)}")
 
-def get_current_user(db: Session, credentials: HTTPAuthorizationCredentials = Security(security), required_role: str = None):
+def get_current_user(credentials: HTTPAuthorizationCredentials = Security(security), db: Session = Depends(get_db)):
     token = credentials.credentials
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
@@ -148,16 +148,11 @@ def get_current_user(db: Session, credentials: HTTPAuthorizationCredentials = Se
         if not user_id:
             raise HTTPException(status_code=401, detail="Invalid token")
 
-        # Проверяем пользователя в БД
         user = db.query(Users).filter(Users.id == user_id).first()
         if not user:
             raise HTTPException(status_code=401, detail="User not found")
 
-        # Проверяем роль, если требуется
-        if required_role and user.username != required_role:
-            raise HTTPException(status_code=403, detail="Access forbidden")
-
-        return user
+        return {"id": user.id, "username": user.username}  # Возвращаем только безопасные данные
 
     except JWTError:
         raise HTTPException(status_code=403, detail="Invalid token")
@@ -256,7 +251,7 @@ async def index():
     return RedirectResponse('/-/readme')
 
 
-@app.get('/-/', summary='* Index', dependencies=[Depends(get_current_user)])
+@app.get('/-/', summary='* Index', dependencies=[Depends(get_current_user)], response_model=None)
 async def _index():
     return RedirectResponse('/-/readme')
 
