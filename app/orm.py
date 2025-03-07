@@ -24,9 +24,8 @@ from contextlib import contextmanager
 db = create_engine(os.getenv('DATABASE'), echo=True, future=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=db)
 
-@contextmanager
 def get_db():
-    """Контекстный менеджер для управления сессией базы данных"""
+    """Функция для получения сессии БД с автоматическим закрытием"""
     db = SessionLocal()
     try:
         yield db
