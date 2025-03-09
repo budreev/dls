@@ -294,7 +294,6 @@ async def _origins(leases: bool = False, db: Session = Depends(get_db)):
             serialize = dict(renewal_period=LEASE_RENEWAL_PERIOD, renewal_delta=LEASE_RENEWAL_DELTA)
             x['leases'] = list(map(lambda _: _.serialize(**serialize), Lease.find_by_origin_ref(db, origin.origin_ref)))
         response.append(x)
-    db.close()
     return JSONr(response)
 
 
@@ -315,7 +314,6 @@ async def _leases(origin: bool = False, db: Session = Depends(get_db)):
             if lease_origin is not None:
                 x['origin'] = lease_origin.serialize()
         response.append(x)
-    db.close()
     return JSONr(response)
 
 
@@ -376,7 +374,6 @@ async def _client_token():
     response = StreamingResponse(iter([content]), media_type="text/plain")
     filename = f'client_configuration_token_{datetime.now().strftime("%d-%m-%y-%H-%M-%S")}.tok'
     response.headers["Content-Disposition"] = f'attachment; filename={filename}'
-
     return response
 
 
