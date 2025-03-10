@@ -88,7 +88,8 @@ async def lifespan(_: FastAPI):
     logger.info(f'Shutting down ...')
 
 
-config = dict(openapi_url='/-/openapi.json', docs_url='/-/docs', redoc_url='/-/redoc')  # dict(openapi_url='/-/openapi.json', docs_url='/-/docs', redoc_url='/-/redoc')
+config = dict(openapi_url='/-/openapi.json', docs_url='/-/docs',
+              redoc_url='/-/redoc')  # dict(openapi_url='/-/openapi.json', docs_url='/-/docs', redoc_url='/-/redoc')
 app = FastAPI(title='FastAPI-DLS', description='Minimal Delegated License Service (DLS).', version=VERSION,
               lifespan=lifespan, **config)
 
@@ -103,75 +104,13 @@ app.add_middleware(
 
 
 # Helper
-# def __get_token(request: Request) -> dict:
-#     authorization_header = request.headers.get('authorization')
-#     token = authorization_header.split(' ')[1]
-#     return jwt.decode(token=token, key=jwt_decode_key, algorithms=ALGORITHMS.RS256, options={'verify_aud': False})
-
-def __get_token(request: Request, required_role: str = None) -> dict:
-    """
-    Проверяет токен, извлекает его данные и валидирует роль пользователя.
-
-    :param request: объект запроса, содержащий заголовок Authorization
-    :param required_role: если передано, дополнительно проверяет, соответствует ли роль пользователя
-    :return: декодированный токен
-    """
+def __get_token(request: Request) -> dict:
     authorization_header = request.headers.get('authorization')
-
-    if not authorization_header:
-        raise HTTPException(status_code=401, detail="Authorization token missing")
-
-    token = authorization_header.split(' ')[1]  # Получаем сам токен
-
-    try:
-        decoded_token = jwt.decode(token, key=jwt_decode_key, algorithms=[ALGORITHMS.RS256],
-                                   options={'verify_aud': False})
-
-        if required_role and decoded_token.get("role") != required_role:
-            raise HTTPException(status_code=403, detail="Forbidden: Insufficient permissions")
-
-        return decoded_token
-
-    except JWTError as e:
-        raise HTTPException(status_code=403, detail=f"Invalid token: {str(e)}")
+    token = authorization_header.split(' ')[1]
+    return jwt.decode(token=token, key=jwt_decode_key, algorithms=ALGORITHMS.RS256, options={'verify_aud': False})
 
 
 # Endpoints
-
-@app.get('/auth/v1/get-token', summary='Get Authorization Token')
-async def get_auth_token(x_api_key: str = Header(None)):
-    """Генерируем токен авторизации с ролями (admin/user)"""
-
-    if x_api_key == "admin_secret_api_key":
-        role = "admin"
-    elif x_api_key == "user_secret_api_key":
-        role = "user"
-    else:
-        raise HTTPException(status_code=403, detail="Forbidden: Invalid API Key")
-
-    try:
-        cur_time = datetime.now(timezone.utc)
-        access_expires_on = cur_time + TOKEN_EXPIRE_DELTA
-
-        payload = {
-            "jti": str(uuid4()),
-            "iat": timegm(cur_time.timetuple()),
-            "nbf": timegm(cur_time.timetuple()),
-            "exp": timegm(access_expires_on.timetuple()),
-            "role": role  # Роль - admin or user
-        }
-
-        auth_token = jwt.encode(payload, key=jwt_encode_key, algorithm=ALGORITHMS.RS256)
-
-        return JSONr({
-            "auth_token": auth_token,
-            "role": role,
-            "expires": access_expires_on.isoformat(),
-            "sync_timestamp": cur_time.isoformat()
-        })
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error generating token: {str(e)}")
 
 
 @app.get('/', summary='Index')
@@ -308,8 +247,6 @@ async def _lease_delete(request: Request, lease_ref: str):
 @app.get('/-/client-token', summary='* Client-Token',
          description='creates a new messenger token for this service instance')
 async def _client_token(request: Request):
-    # __get_token(request, required_role="admin")
-
     cur_time = datetime.now(timezone.utc)
     exp_time = cur_time + CLIENT_TOKEN_EXPIRE_DELTA
 
