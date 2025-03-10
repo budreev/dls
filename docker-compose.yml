@@ -1,6 +1,6 @@
 x-dls-variables: &dls-variables
   TZ: Europe/Moscow
-  DLS_URL: localhost
+  DLS_URL: 176.124.211.156
   ADMIN_USERNAME: "super_admin"
   ADMIN_PASSWORD: "super_password"
   DLS_PORT: 8080
