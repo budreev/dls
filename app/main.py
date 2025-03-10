@@ -35,7 +35,6 @@ TZ = datetime.now().astimezone().tzinfo
 # Load basic variables
 VERSION, COMMIT, DEBUG = env('VERSION', 'unknown'), env('COMMIT', 'unknown'), bool(env('DEBUG', False))
 
-
 # Load DLS variables (all prefixed with "INSTANCE_*" is used as "SERVICE_INSTANCE_*" or "SI_*" in official dls service)
 DLS_URL = str(env('DLS_URL', 'localhost'))
 DLS_PORT = int(env('DLS_PORT', '8080'))
@@ -107,11 +106,13 @@ app.add_middleware(
 
 security = HTTPBearer()
 
+
 # Helper
 def __get_token(request: Request) -> dict:
     authorization_header = request.headers.get('authorization')
     token = authorization_header.split(' ')[1]
     return jwt.decode(token=token, key=jwt_decode_key, algorithms=ALGORITHMS.RS256, options={'verify_aud': False})
+
 
 def get_current_user(credentials: HTTPAuthorizationCredentials = Security(security), db: Session = Depends(get_db)):
     token = credentials.credentials
@@ -131,6 +132,7 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Security(securi
     except JWTError:
         raise HTTPException(status_code=403, detail="Invalid token")
 
+
 def create_access_token(data: dict, expires_delta: timedelta):
     to_encode = data.copy()
     expire = datetime.utcnow() + expires_delta
@@ -149,6 +151,7 @@ def create_refresh_token(user_id: str, db: Session):
 
     return refresh_token
 
+
 # Endpoints
 
 # Логин: выдаёт Access и Refresh токены
@@ -164,6 +167,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
 
     return {"access_token": access_token, "refresh_token": refresh_token, "token_type": "bearer"}
 
+
 # Обновление Access-токена
 @app.post("/auth/v1/refresh")
 async def refresh_token(refresh_token: str, db: Session = Depends(get_db)):
@@ -177,12 +181,14 @@ async def refresh_token(refresh_token: str, db: Session = Depends(get_db)):
 
     return {"access_token": new_access_token, "token_type": "bearer"}
 
+
 # Выход: удаление Refresh-токена
 @app.post("/auth/v1/logout")
 async def logout(refresh_token: str, db: Session = Depends(get_db)):
     db.query(RefreshTokens).filter(RefreshTokens.token == refresh_token).delete()
     db.commit()
     return {"message": "Successfully logged out"}
+
 
 @app.get('/-/', summary='* Index', dependencies=[Depends(get_current_user)], response_model=None)
 async def _index():
@@ -194,7 +200,8 @@ async def _health():
     return JSONr({'status': 'up'})
 
 
-@app.get('/-/config', summary='* Config', description='returns environment variables.', dependencies=[Depends(get_current_user)])
+@app.get('/-/config', summary='* Config', description='returns environment variables.',
+         dependencies=[Depends(get_current_user)])
 async def _config():
     return JSONr({
         'VERSION': str(VERSION),
@@ -307,7 +314,6 @@ async def _lease_delete(lease_ref: str, db: Session = Depends(get_db)):
 @app.get('/-/client-token', summary='* Client-Token',
          description='creates a new messenger token for this service instance')
 async def _client_token(request: Request):
-
     cur_time = datetime.now(timezone.utc)
     exp_time = cur_time + CLIENT_TOKEN_EXPIRE_DELTA
 
@@ -351,7 +357,7 @@ async def _client_token(request: Request):
 
 
 # venv/lib/python3.9/site-packages/nls_services_auth/test/test_origins_controller.py
-@app.post('/auth/v1/origin', description='find or create an origin', dependencies=[Depends(get_current_user)])
+@app.post('/auth/v1/origin', description='find or create an origin')
 async def auth_v1_origin(request: Request, db: Session = Depends(get_db)):
     j, cur_time = json_loads((await request.body()).decode('utf-8')), datetime.now(timezone.utc)
 
@@ -381,7 +387,7 @@ async def auth_v1_origin(request: Request, db: Session = Depends(get_db)):
 
 
 # venv/lib/python3.9/site-packages/nls_services_auth/test/test_origins_controller.py
-@app.post('/auth/v1/origin/update', description='update an origin evidence', dependencies=[Depends(get_current_user)])
+@app.post('/auth/v1/origin/update', description='update an origin evidence')
 async def auth_v1_origin_update(request: Request, db: Session = Depends(get_db)):
     j, cur_time = json_loads((await request.body()).decode('utf-8')), datetime.now(timezone.utc)
 
@@ -483,7 +489,7 @@ async def auth_v1_token(request: Request):
 
 
 # venv/lib/python3.9/site-packages/nls_services_lease/test/test_lease_multi_controller.py
-@app.post('/leasing/v1/lessor', description='request multiple leases (borrow) for current origin', dependencies=[Depends(get_current_user)])
+@app.post('/leasing/v1/lessor', description='request multiple leases (borrow) for current origin')
 async def leasing_v1_lessor(request: Request, db: Session = Depends(get_db)):
     j, token, cur_time = json_loads((await request.body()).decode('utf-8')), __get_token(request), datetime.now(
         timezone.utc)
@@ -532,7 +538,7 @@ async def leasing_v1_lessor(request: Request, db: Session = Depends(get_db)):
 
 # venv/lib/python3.9/site-packages/nls_services_lease/test/test_lease_multi_controller.py
 # venv/lib/python3.9/site-packages/nls_dal_service_instance_dls/schema/service_instance/V1_0_21__product_mapping.sql
-@app.get('/leasing/v1/lessor/leases', description='get active leases for current origin', dependencies=[Depends(get_current_user)])
+@app.get('/leasing/v1/lessor/leases', description='get active leases for current origin')
 async def leasing_v1_lessor_lease(request: Request, db: Session = Depends(get_db)):
     token, cur_time = __get_token(request), datetime.now(timezone.utc)
 
@@ -552,7 +558,7 @@ async def leasing_v1_lessor_lease(request: Request, db: Session = Depends(get_db
 
 # venv/lib/python3.9/site-packages/nls_services_lease/test/test_lease_single_controller.py
 # venv/lib/python3.9/site-packages/nls_core_lease/lease_single.py
-@app.put('/leasing/v1/lease/{lease_ref}', description='renew a lease', dependencies=[Depends(get_current_user)])
+@app.put('/leasing/v1/lease/{lease_ref}', description='renew a lease')
 async def leasing_v1_lease_renew(request: Request, lease_ref: str, db: Session = Depends(get_db)):
     token, cur_time = __get_token(request), datetime.now(timezone.utc)
 
@@ -579,7 +585,7 @@ async def leasing_v1_lease_renew(request: Request, lease_ref: str, db: Session =
 
 
 # venv/lib/python3.9/site-packages/nls_services_lease/test/test_lease_single_controller.py
-@app.delete('/leasing/v1/lease/{lease_ref}', description='release (return) a lease', dependencies=[Depends(get_current_user)])
+@app.delete('/leasing/v1/lease/{lease_ref}', description='release (return) a lease')
 async def leasing_v1_lease_delete(request: Request, lease_ref: str, db: Session = Depends(get_db)):
     token, cur_time = __get_token(request), datetime.now(timezone.utc)
 
@@ -605,7 +611,7 @@ async def leasing_v1_lease_delete(request: Request, lease_ref: str, db: Session 
 
 
 # venv/lib/python3.9/site-packages/nls_services_lease/test/test_lease_multi_controller.py
-@app.delete('/leasing/v1/lessor/leases', description='release all leases', dependencies=[Depends(get_current_user)])
+@app.delete('/leasing/v1/lessor/leases', description='release all leases')
 async def leasing_v1_lessor_lease_remove(request: Request, db: Session = Depends(get_db)):
     token, cur_time = __get_token(request), datetime.now(timezone.utc)
 
@@ -625,7 +631,7 @@ async def leasing_v1_lessor_lease_remove(request: Request, db: Session = Depends
     return JSONr(response)
 
 
-@app.post('/leasing/v1/lessor/shutdown', description='shutdown all leases', dependencies=[Depends(get_current_user)])
+@app.post('/leasing/v1/lessor/shutdown', description='shutdown all leases')
 async def leasing_v1_lessor_shutdown(request: Request, db: Session = Depends(get_db), ):
     j, cur_time = json_loads((await request.body()).decode('utf-8')), datetime.now(timezone.utc)
 
